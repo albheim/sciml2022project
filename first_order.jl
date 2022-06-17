@@ -1,6 +1,3 @@
-cd("project/heart")
-import Pkg
-Pkg.activate(".")
 using DelimitedFiles, Plots, Optimization, OptimizationFlux, OptimizationOptimJL, Statistics
 
 p = readdlm("pressure.csv", ',', Float64)[:, 2] # [mmHg]
@@ -40,7 +37,7 @@ function callback(ps, l, pest)
     false
 end
 
-ps = rand(5)
+ps = [-1., 1, 1, 1, 1]
 
 optf = OptimizationFunction(loss, Optimization.AutoForwardDiff())
 optprob = OptimizationProblem(optf, ps)

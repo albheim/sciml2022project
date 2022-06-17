@@ -1,6 +1,3 @@
-cd("project/heart")
-import Pkg
-Pkg.activate(".")
 using DelimitedFiles, Plots, Optimization, OptimizationFlux, OptimizationOptimJL, Statistics
 
 p = readdlm("pressure.csv", ',', Float64)[:, 2] # [mmHg]
@@ -19,9 +16,9 @@ plot(t, p, label="p")
 plot!(t, ϕ, label="ϕ")
 
 # Second  order model
-function wk4p!(dx, x, p, t)
+function wk4p!(x, p, t)
     A, B = p
-    dx .= A * x + B * ϕc(t)
+    A * x + B * ϕc(t)
 end
 
 function loss(ps, p)
@@ -30,17 +27,26 @@ function loss(ps, p)
     C = reshape(ps[7:8], 1, 2)
     D = ps[9:9]
     u0 = ps[10:11]
-    prob = ODEProblem(wk4p!, [u0], (0, t[end]), (A, B))
+    prob = ODEProblem(wk4p!, u0, (0, t[end]), (A, B))
     sol = solve(prob, saveat=h)
-    pest = C * sol[1, :] + D * ϕc.(sol.t)
-    sum(abs2, pest .- pc.(sol.t)), pest
+    pest = C * Array(sol) + D * ϕc.(sol.t)'
+    mean(abs2, pest .- pc.(sol.t)), pest
 end
 
 function callback(ps, l, pest)
     t = range(0, step=h, length=length(pest))
-    p = plot(t, pest)
+    p = plot(t, pest')
     scatter!(p, t, pc.(t))
     display(p)
     @show l 
     false
 end
+
+ps = [-10., 0, 0, -10, 1, 1, 1, -1, 1, 1, 1] #.+ 0.01 * randn(11)
+
+optf = OptimizationFunction(loss, Optimization.AutoForwardDiff())
+optprob = OptimizationProblem(optf, ps)
+optsol = solve(optprob, ADAM(0.05), maxiters=1000, callback=callback)
+
+optprob = OptimizationProblem(optf, optsol.u)
+optsol = solve(optprob, BFGS(), callback=callback)
