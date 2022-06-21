@@ -34,68 +34,7 @@ function callback(ps, l, pest)
     false
 end
 
-# Second  order model
-function wk4p(x, p, t)
-    A, B = p
-    A * x + B * [ϕc(t)]
-end
-
-function loss(ps, p)
-    ns = p
-    A = reshape(ps[1:ns^2], ns, ns)
-    B = reshape(ps[(ns^2+1):(ns^2+ns)], ns, 1)
-    C = reshape(ps[(ns^2+ns+1):(ns^2+2ns)], 1, ns)
-    D = ps[(ns+1)^2]
-    u0 = reshape(ps[((ns+1)^2+1):((ns+1)^2+ns)], ns)
-    prob = ODEProblem(wk4p, u0, (0, t[end]), (A, B))
-    sol = solve(prob, saveat=h)
-    pest = vec(C * Array(sol) + D * ϕc.(sol.t)')
-    mean(abs2, pest - pc.(sol.t)), pest
-end
-
-# 1 state
-nstate = 1
-ps = rand(5)
-# 2 state
-nstate = 2
-ps = randn(11)
-
-optf = OptimizationFunction(loss, Optimization.AutoForwardDiff())
-optprob = OptimizationProblem(optf, ps, nstate)
-optsol = solve(optprob, ADAM(0.05), maxiters=1000, callback=callback)
-
-optprob = OptimizationProblem(optf, optsol.u, nstate)
-optsol = solve(optprob, ADAM(0.01), maxiters=200, callback=callback)
-
-optprob = OptimizationProblem(optf, optsol.u, nstate)
-optsol = solve(optprob, BFGS(), callback=callback)
-
-# Learned params
-learned_params = optsol.u
-A = reshape(optsol.u[1:nstate^2], nstate, nstate)
-B = reshape(optsol.u[(nstate^2+1):(nstate^2+nstate)], nstate, 1)
-C = reshape(optsol.u[(nstate^2+nstate+1):(nstate^2+2ns)], 1, nstate)
-D = optsol.u[(nstate+1)^2]
-u0 = reshape(optsol.u[((nstate+1)^2+1):((nstate+1)^2+nstate)], nstate)
-
-# Standard params
-function θwk4()
-    Rp = 0.79 # Peripheral (systemic) resistance [mmHg*ml^-1*s]
-    C = 1.22 # Total arterial compliance [ml/mmHg]
-    Rc = 0.056 # characeristic aoritic resistance
-    L = 0.0051 # Total arterial impedance [mmHg*s^2*ml^-1]
-    return [1000 / 60, 60 / 1000, 1000 / 60, 1000 / 60] .* [Rp, C, Rc, L] # convert impedance units to match L/min flows 
-end
-(Rp, Cc, Rc, L) = θwk4()
-
-# State space matrices (m not to confuse Cm with parameter C)
-A = [-1/(Cc*Rp) 0; 0 -Rc/L]
-B = [1; Rc]
-C = [1 / Cc -Rc / L]
-D = Rc;
-u0 = [4.82090092759144, 0.04580860132564981]
-
-# Neural net fit
+# Neural net 
 hidden = 16
 nnps, re = Flux.destructure(
     Chain(
@@ -106,17 +45,11 @@ nnps, re = Flux.destructure(
 )
 
 function wk4p_nn(x, p, t)
-    nstate = 2
-    A = reshape(@view p[1:nstate^2], nstate, nstate)
-    B = reshape(@view p[(nstate^2+1):(nstate^2+nstate)], nstate, 1)
-    nnps = @view p[(nstate^2+nstate+1):end]
-
     ϕ = ϕc(t)
-    vec(A * x + B * ϕ + re(nnps)([x; ϕ]))
+    re(p)([x; ϕ])
 end
 
 function simulate_nn(ps, p)
-    A, B, C, D, u0 = p
     psall = [vec(A); vec(B); ps]
     prob = ODEProblem(wk4p_nn, u0, (0, t[end]), psall)
     solve(prob, saveat=h)
