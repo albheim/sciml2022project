@@ -71,7 +71,11 @@ optsol = solve(optprob, ADAM(0.01), maxiters=200, callback=callback)
 optprob = OptimizationProblem(optf, optsol.u, nstate)
 optsol = solve(optprob, BFGS(), callback=callback)
 
-optpar = optsol.u
+A = reshape(optsol.u[1:nstate^2], nstate, nstate)
+B = reshape(optsol.u[(nstate^2+1):(nstate^2+nstate)], nstate, 1)
+C = reshape(optsol.u[(nstate^2+nstate+1):(nstate^2+2ns)], 1, nstate)
+D = optsol.u[(nstate+1)^2]
+u0 = reshape(optsol.u[((nstate+1)^2+1):((nstate+1)^2+nstate)], nstate)
 
 # Neural net fit
 hidden = 16
@@ -90,36 +94,32 @@ function wk4p_nn(x, p, t)
 end
 
 function simulate_nn(ps, p)
-    ns, = p
-    A = reshape(ps[1:ns^2], ns, ns)
-    B = reshape(ps[(ns^2+1):(ns^2+ns)], ns, 1)
-    u0 = reshape(ps[((ns+1)^2+1):((ns+1)^2+ns)], ns)
-    nnps = ps[((ns+1)^2+ns+1):end]
-    prob = ODEProblem(wk4p_nn, u0, (0, t[end]), (A, B, nnps))
+    A, B, C, D, u0 = p
+    prob = ODEProblem(wk4p_nn, u0, (0, t[end]), (A, B, ps))
     solve(prob, saveat=h)
 end
 
 function loss_nn(ps, p)
+    A, B, C, D, u0 = p
     sol = simulate_nn(ps, p)
-    C = reshape(ps[(ns^2+ns+1):(ns^2+2ns)], 1, ns)
-    D = ps[(ns+1)^2]
     pest = vec(C * Array(sol) + D * ϕc.(sol.t)')
     mean(abs2, pest .- pc.(sol.t)), pest
 end
 
-ps = [optpar; nnps]
+ps = nnps
+p = (A, B, C, D, u0)
 
 # Is this faster with Zygote?
 optf = OptimizationFunction(loss_nn, Optimization.AutoForwardDiff())
 
-optprob = OptimizationProblem(optf, ps, (nstate,))
+optprob = OptimizationProblem(optf, ps, p)
 optsol = solve(optprob, ADAM(0.05), maxiters=1000, callback=callback)
 
-optprob = OptimizationProblem(optf, optsol.u, (nstate,))
+optprob = OptimizationProblem(optf, optsol.u, p)
 optsol = solve(optprob, BFGS(), callback=callback)
 
 # Do symbolic regression
-sol = simulate_nn(optsol.u, (nstate,))
+sol = simulate_nn(optsol.u, p)
 x = [Array(sol); ϕc.(sol.t)']
 y = re(optsol.u[(length(optpar)+1):end])(x)
 
