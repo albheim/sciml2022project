@@ -1,26 +1,15 @@
-cd(@__DIR__) # Cd to dir containing this file
-import Pkg
-Pkg.activate(".") # Activate local environment
+include(joinpath(@__DIR__, "setup.jl"))
 
-using DelimitedFiles, Plots, Statistics
-using Flux
-using Optimization, OptimizationFlux, OptimizationOptimJL
-using Symbolics, SymbolicRegression, DataDrivenDiffEq, ModelingToolkit
-
-p = readdlm("pressure.csv", ',', Float64)[:, 2] # [mmHg]
-ϕ = (60 / 1000) .* readdlm("flow.csv", ',', Float64)[:, 2] # L/min
-const h = 0.005
-const t = 0:h:h*(length(p)-1)
-
-# Spline interpolations, to get C2 input signal ϕc
-include("CubicSplines.jl")
-αϕ = 1 - 1e-12 # FIXME: should be set using xval
-αp = αϕ # FIXME: should be set using xval
-const ϕc = CubicSpline(collect(t), ϕ, periodic=true, α=αϕ)
-const pc = CubicSpline(collect(t), p, periodic=true, α=αp)
-
-plot(t, p, label="p")
-plot!(t, ϕ, label="ϕ")
+# Define callback with plot and print
+function callback(ps, l, pest)
+    if isinteractive() 
+        p = plot(tv, pest)
+        scatter!(p, tv, pc.(tv))
+        display(p)
+    end
+    @show l 
+    false
+end
 
 ############### FIRST ORDER MODEL #############################3
 function wk4p!(dx, x, p, t)
@@ -29,20 +18,10 @@ end
 
 function loss(ps, p)
     A, B, C, D, u0 = ps
-    prob = ODEProblem(wk4p!, [u0], (0, t[end]), (A, B))
+    prob = ODEProblem(wk4p!, [u0], (0, tv[end]), (A, B))
     sol = solve(prob, saveat=h)
     pest = C * sol[1, :] + D * ϕc.(sol.t)
     mean(abs2, pest .- pc.(sol.t)), pest
-end
-
-function callback(ps, l, pest)
-    if isinteractive() 
-        p = plot(t, pest)
-        scatter!(p, t, pc.(t))
-        display(p)
-    end
-    @show l 
-    false
 end
 
 ps = Float64[-1, 1, 1, 1, 1]
@@ -74,7 +53,7 @@ function simulate(ps, p)
     A = ps[1]
     B = ps[2] 
     u0 = ps[5]
-    prob = ODEProblem(wk4p_nn!, [u0], (0, t[end]), (A, B, ps[6:5+nnlen]))
+    prob = ODEProblem(wk4p_nn!, [u0], (0, tv[end]), (A, B, ps[6:5+nnlen]))
     solve(prob, saveat=h)
 end
 
@@ -139,19 +118,19 @@ end
 
 A, B, C, D, u0 = ps[1:5]
 
-p1 = plot(t, pc.(t), label="real")
+p1 = plot(tv, pc.(tv), label="real")
 
-prob_default = ODEProblem(wk4p!, [u0], (0, t[end]), (A, B))
+prob_default = ODEProblem(wk4p!, [u0], (0, tv[end]), (A, B))
 sol_default = solve(prob_default, saveat=h)
 pest_default = C * sol_default[1, :] + D * ϕc.(sol_default.t)
-plot!(p1, t, pest_default, label="default")
+plot!(p1, tv, pest_default, label="default")
 
-prob_nn = ODEProblem(wk4p_nn!, [u0], (0, t[end]), (A, B, ps[6:end]))
+prob_nn = ODEProblem(wk4p_nn!, [u0], (0, tv[end]), (A, B, ps[6:end]))
 sol_nn = solve(prob_nn, saveat=h)
 pest_nn = C * sol_nn[1, :] + D * ϕc.(sol_nn.t)
-plot!(p1, t, pest_nn, label="nn")
+plot!(p1, tv, pest_nn, label="nn")
 
-prob_extended = ODEProblem(wk4p_extended!, [u0], (0, t[end]), (A, B))
+prob_extended = ODEProblem(wk4p_extended!, [u0], (0, tv[end]), (A, B))
 sol_extended = solve(prob_extended, saveat=h)
 pest_extended = C * sol_extended[1, :] + D * ϕc.(sol_extended.t)
-plot!(p1, t, pest_extended, label="extended")
+plot!(p1, tv, pest_extended, label="extended")
