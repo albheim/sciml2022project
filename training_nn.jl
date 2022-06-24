@@ -123,7 +123,7 @@ open(joinpath("data", "estimates", "order_$(nstate)_nn_symbolic_fit.txt"), "w") 
 end
 
 # Plotting
-p1 = plot(; xlabel="Time [s]", ylabel="Pressure [mmHg]", title="$(nstate) state model using NN dynamics and observation")
+p1 = plot(; xlabel="Time [s]", ylabel="Pressure [mmHg]", title="$(nstate) state model, learned dynamics and observations")
 
 scatter!(p1, tv, pc.(tv), label="data")
 
@@ -131,10 +131,15 @@ wkpar = get_standard_model(nstate)
 prob = ODEProblem(wk4p, wkpar[5], (0, tv[end]), wkpar[1:2])
 sol = solve(prob, saveat=h)
 p_wk = wkpar[3] * Array(sol) + wkpar[4] * ϕc.(sol.t)'
-plot!(p1, tv, p_wk', label="windkessel")
+mse_wk = sum(abs2, p_wk' - pc.(tv))
+plot!(p1, tv, p_wk', label="wk")
 
+mse_nn = sum(abs2, pest' - pc.(tv))
 plot!(p1, tv, pest', label="nn")
 
+mse_symb = sum(abs2, p_ext' - pc.(tv))
 plot!(p1, tv, p_ext', label="symbolic regression")
 
 savefig(p1, joinpath("fig", "order_$(nstate)_nn.png"))
+
+writedlm(joinpath("data", "estimates", "order_$(nstate)_nn_mse.csv"), [mse_wk, mse_nn, mse_symb] ./ length(tv))

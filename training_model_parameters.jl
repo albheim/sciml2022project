@@ -59,7 +59,7 @@ writedlm(joinpath("data", "estimates", "order_$(nstate)_params.csv"), optsol.u, 
 
 # Read data
 data = readdlm(joinpath("data", "estimates", "order_$(nstate)_param_fit.csv"), ',')
-p = data[:, 1:1]'
+pest = data[:, 1:1]'
 dx = data[:, 2:nstate+1]'
 x = data[:, nstate+2:2nstate+2]'
 
@@ -74,8 +74,12 @@ prob = ODEProblem(wk4p, u0, (0, tv[end]), (A, B))
 sol = solve(prob, saveat=h)
 x = Array(sol)
 p_wk = C * x + D * ϕc.(sol.t)'
+mse_wk = sum(abs2, p_wk' - pc.(tv))
 plot!(p1, tv, p_wk', label="windkessel")
 
-plot!(p1, tv, p', label="linear fit")
+mse_lin = sum(abs2, pest' - pc.(tv))
+plot!(p1, tv, pest', label="linear fit")
 
 savefig(p1, joinpath("fig", "order_$(nstate)_linear_parameter_fit.png"))
+
+writedlm(joinpath("data", "estimates", "order_$(nstate)_linear_mse.csv"), [mse_wk, mse_lin] ./ length(tv))
