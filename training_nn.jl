@@ -85,10 +85,10 @@ basis = Basis([
 ], [u; ϕ])
 println(basis)
 
-λs = exp10.(-10:0.1:-1)
+λs = nstate == 1 ? exp10.(-2:0.1:1) : exp10.(-1:0.1:2)
 opt = STLSQ(λs)
-res = solve(prob, basis, opt)
 
+res = solve(prob, basis, opt)
 println(result(res))
 plot(res)
 
@@ -104,10 +104,10 @@ x_ext = [Array(sol); ϕc.(sol.t)']
 # Then we find observation function, based on new dynamics function
 prob = DirectDataDrivenProblem(x_ext, pest)
 
-λs = exp10.(-10:0.1:-1)
+λs = exp10.(-2:0.1:1) 
 opt = STLSQ(λs)
-res = solve(prob, basis, opt)
 
+res = solve(prob, basis, opt)
 println(result(res))
 plot(res)
 
@@ -123,7 +123,7 @@ open(joinpath("data", "estimates", "order_$(nstate)_nn_symbolic_fit.txt"), "w") 
 end
 
 # Plotting
-p1 = plot(; xlabel="Time [s]", ylabel="Pressure [mmHg]", title="$(nstate) state model using NN dynamics")
+p1 = plot(; xlabel="Time [s]", ylabel="Pressure [mmHg]", title="$(nstate) state model using NN dynamics and observation")
 
 scatter!(p1, tv, pc.(tv), label="data")
 

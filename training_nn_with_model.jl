@@ -67,6 +67,7 @@ x = data[:, nstate+2:2nstate+1]'
 nnout = data[:, 2nstate+3:end]'
 
 # Better approach?
+#=
 prob = ContinuousDataDrivenProblem(x, dx, U=ϕdata)
 plot(prob)
 
@@ -74,6 +75,7 @@ plot(prob)
 @variables u[1:nstate](t) ϕ(t)
 basis = Basis(polynomial_basis([u; ϕ], 2), u, controls=[ϕ])
 println(basis)
+=#
 
 
 # Do symbolic regression, pick one at a time
@@ -89,7 +91,8 @@ basis = Basis([
 ], [u; ϕ])
 println(basis)
 
-λs = exp10.(-10:0.1:-3)
+# Just some hand tuning
+λs = nstate == 1 ? exp10.(-2:0.1:1) : exp10.(-1:0.1:2)
 opt = STLSQ(λs)
 res = solve(prob, basis, opt)
 println(result(res))
@@ -103,7 +106,7 @@ state = states(result(res))
 f, = build_function(expr, state; expression=Val(false))
 
 function wk4p_extended(x, p, t)
-    wk4p(x, p[1:2], t) + p[3](x, ϕc(t))
+    wk4p(x, p[1:2], t) + p[3]([x; ϕc(t)])
 end
 
 # Plotting
