@@ -1,5 +1,14 @@
 function first_order_standard_model()
-    1, 1, 1, 1, 1 # TODO
+    Rp = 13.6
+    Cc = 0.0996
+
+    A = [-1/(Cc*Rp);;]
+    B = [1.0;;]
+    C = [1/Cc;;]
+    D = [0.0;;]
+    u0 = [7.20111]
+
+    A, B, C, D, u0
 end
 
 function second_order_standard_model()
@@ -10,9 +19,9 @@ function second_order_standard_model()
     Rp, Cc, Rc, L = [1000 / 60, 60 / 1000, 1000 / 60, 1000 / 60] .* [Rp, Cc, Rc, L] # convert impedance units to match L/min flows 
 
     A = [-1/(Cc*Rp) 0; 0 -Rc/L]
-    B = [1; Rc]
-    C = [1 / Cc -Rc / L]
-    D = Rc
+    B = [1; Rc;;]
+    C = [1/Cc -Rc/L]
+    D = [Rc;;]
     u0 = [4.82090092759144, 0.04580860132564981]
 
     A, B, C, D, u0
@@ -24,4 +33,9 @@ function get_standard_model(order)
     else
         second_order_standard_model()
     end
+end
+
+function wk4p(x, p, t)
+    A, B = p
+    A * x + B * [ϕc(t)]
 end

@@ -1,8 +1,11 @@
 include(joinpath(@__DIR__, "setup.jl"))
 
+# Parameters
+nstate = 2
+
 # Neural net fit
 hidden = 16
-nnps, re = Flux.destructure(
+nnps, re= Flux.destructure(
     Chain(
         Dense(nstate + 1, hidden, Flux.elu),
         Dense(hidden, hidden, Flux.elu),
@@ -11,25 +14,18 @@ nnps, re = Flux.destructure(
 )
 
 function wk4p_nn(x, p, t)
-    nstate = 2
     A = reshape(p[1:nstate^2], nstate, nstate)
     B = reshape(p[(nstate^2+1):(nstate^2+nstate)], nstate, 1)
     nnps = p[(nstate^2+nstate+1):end]
-
-    ϕ = ϕc(t)
-    vec(A * x + B * ϕ + re(nnps)([x; ϕ]))
+    vec(wk4p(x, (A, B), t) + re(nnps)([x; ϕc(t)]))
 end
 
-function simulate_nn(ps, p)
-    A, B, C, D, u0 = p
-    psall = [vec(A); vec(B); ps]
-    prob = ODEProblem(wk4p_nn, u0, (0, tv[end]), psall)
-    solve(prob, saveat=h)
-end
 
 function loss_nn(ps, p)
     A, B, C, D, u0 = p
-    sol = simulate_nn(ps, p)
+    psall = [vec(A); vec(B); ps]
+    prob = ODEProblem(wk4p_nn, u0, (0, tv[end]), psall)
+    sol = solve(prob, saveat=h)
     pest = vec(C * Array(sol) + D * ϕc.(sol.t)')
     mean(abs2, pest .- pc.(sol.t)), pest
 end
@@ -40,70 +36,92 @@ p = get_standard_model(nstate)
 # Is this faster with Zygote?
 optf = OptimizationFunction(loss_nn, Optimization.AutoForwardDiff())
 
+println("Running ADAM opt")
 optprob = OptimizationProblem(optf, ps, p)
-optsol = solve(optprob, ADAM(0.05), maxiters=100, callback=callback)
+optsol = solve(optprob, ADAM(0.001), maxiters=500, callback=callback)
 
+println("Running BFGS opt")
 optprob = OptimizationProblem(optf, optsol.u, p)
 optsol = solve(optprob, BFGS(), callback=callback)
 
 # Generate data
-sol = simulate_nn(optsol.u, p)
+psall = [vec(A); vec(B); optsol.u]
+prob = ODEProblem(wk4p_nn, u0, (0, tv[end]), psall)
+sol = solve(prob, saveat=h)
 x = [Array(sol); ϕc.(sol.t)']
-y = re(optsol.u)(x)
+nnout = re(optsol.u)(x)
+dx = reduce(hcat, wk4p.(sol.u, ((A, B),), sol.t))
+pest = [C D] * x 
 
 # Save data
 println("Saving data")
-writedlm(joinpath("data", "estimates", "order_$(nstate)_nn.csv"), [p' dx' x'], ',')
+writedlm(joinpath("data", "estimates", "order_$(nstate)_nn_with_model.csv"), [pest' dx' x' nnout'], ',')
+writedlm(joinpath("data", "estimates", "order_$(nstate)_nn_with_model_params.csv"), optsol.u, ',')
+
+# Read data
+data = readdlm(joinpath("data", "estimates", "order_$(nstate)_nn_with_model.csv"), ',')
+pest = data[:, 1:1]'
+dx = data[:, 2:nstate+1]'
+x = data[:, nstate+2:2nstate+1]'
+ϕdata = data[:, 2nstate+2:2nstate+2]'
+nnout = data[:, 2nstate+3:end]'
+
+# Better approach?
+prob = ContinuousDataDrivenProblem(x, dx, U=ϕdata)
+plot(prob)
+
+@parameters t
+@variables u[1:nstate](t) ϕ(t)
+basis = Basis(polynomial_basis([u; ϕ], 2), u, controls=[ϕ])
+println(basis)
 
 
-# Do symbolic regression
-prob = DirectDataDrivenProblem(x, y)
+# Do symbolic regression, pick one at a time
+prob = DirectDataDrivenProblem([x; ϕdata], nnout)
 
-@variables u[1:2] ϕ
+# Same basis for both
+@parameters t
+@variables u[1:nstate](t) ϕ(t)
 basis = Basis([
-    polynomial_basis([u; ϕ], 3);
+    polynomial_basis([u; ϕ], 2);
+    #exp.(polynomial_basis(u, 2));
     #sin.(polynomial_basis([u; ϕ], 2));
 ], [u; ϕ])
 println(basis)
 
-res = solve(prob, basis, STLSQ(2.0))
-println(res)
+λs = exp10.(-10:0.1:-3)
+opt = STLSQ(λs)
+res = solve(prob, basis, opt)
 println(result(res))
 
-# Check solution
-eq = substitute(equations(result(res))[1].rhs, parameter_map(res))
-generate_function(eq, u; expression=Val(true))
+# Generate function
+expr = substitute([Num(eq.rhs) for eq in equations(result(res))], Dict(parameter_map(res)))
+open(joinpath("data", "estimates", "order_$(nstate)_nn_with_model_symbolic_fit.txt"), "w") do io
+    println(io, expr)
+end
+state = states(result(res))
+f, = build_function(expr, state; expression=Val(false))
 
-f = generate_function(result(res), states(result(res)), parameters(result(res)))
-
-function wk4p_extended!(dx, x, p, t)
-    wk4p!(dx, x, p, t) # Update according to base eq
-    dx .+= f([x; ϕc(t)])
+function wk4p_extended(x, p, t)
+    wk4p(x, p[1:2], t) + p[3](x, ϕc(t))
 end
 
-
 # Plotting
-ns = nstate
-ps = optpar
-A = reshape(ps[1:ns^2], ns, ns)
-B = reshape(ps[(ns^2+1):(ns^2+ns)], ns, 1)
-C = reshape(ps[(ns^2+ns+1):(ns^2+2ns)], 1, ns)
-D = ps[(ns+1)^2]
-u0 = reshape(ps[((ns+1)^2+1):((ns+1)^2+ns)], ns)
+p1 = plot(; xlabel="Time [s]", ylabel="Pressure [mmHg]", title="$(nstate) state model using WK + NN dynamics")
 
-p1 = plot(tv, pc.(tv), label="real")
+scatter!(p1, tv, pc.(tv), label="data")
 
-prob_default = ODEProblem(wk4p, [u0], (0, tv[end]), (A, B))
-sol_default = solve(prob_default, saveat=h)
-pest_default = C * sol_default[1, :] + D * ϕc.(sol_default.t)
-plot!(p1, tv, pest_default, label="default")
+wkpar = get_standard_model(nstate)
+prob = ODEProblem(wk4p, wkpar[5], (0, tv[end]), wkpar[1:2])
+sol = solve(prob, saveat=h)
+p_wk = wkpar[3] * Array(sol) + wkpar[4] * ϕc.(sol.t)'
+plot!(p1, tv, p_wk', label="windkessel")
 
-prob_nn = ODEProblem(wk4p_nn, [u0], (0, tv[end]), (A, B, ps[6:end]))
-sol_nn = solve(prob_nn, saveat=h)
-pest_nn = C * sol_nn[1, :] + D * ϕc.(sol_nn.t)
-plot!(p1, tv, pest_nn, label="nn")
+plot!(p1, tv, pest', label="nn")
 
-prob_extended = ODEProblem(wk4p_extended!, [u0], (0, tv[end]), (A, B))
-sol_extended = solve(prob_extended, saveat=h)
-pest_extended = C * sol_extended[1, :] + D * ϕc.(sol_extended.t)
-plot!(p1, tv, pest_extended, label="extended")
+prob = ODEProblem(wk4p_extended, x[1:nstate, 1], (0, tv[end]), (wkpar[1], wkpar[2], f))
+sol = solve(prob, saveat=h)
+p_ext = wkpar[3] * Array(sol) + wkpar[4] * ϕc.(sol.t)'
+plot!(p1, tv, p_ext', label="symbolic regression")
+
+savefig(p1, joinpath("fig", "order_$(nstate)_nn_with_model.png"))

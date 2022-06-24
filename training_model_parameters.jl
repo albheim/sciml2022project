@@ -45,9 +45,9 @@ u0 = reshape(optsol.u[((nstate+1)^2+1):((nstate+1)^2+nstate)], nstate)
 
 prob = ODEProblem(wk4p, u0, (0, tv[end]), (A, B))
 sol = solve(prob, saveat=h)
-x = Array(sol)
-dx = A * x + B * ϕc.(sol.t)'
-p = C * x + D * ϕc.(sol.t)'
+x = [Array(sol); ϕc.(sol.t)']
+dx = [A B] * x
+p = [C D] * x
 
 
 
@@ -57,8 +57,25 @@ writedlm(joinpath("data", "estimates", "order_$(nstate)_param_fit.csv"), [p' dx'
 writedlm(joinpath("data", "estimates", "order_$(nstate)_params.csv"), optsol.u, ',')
 
 
+# Read data
+data = readdlm(joinpath("data", "estimates", "order_$(nstate)_param_fit.csv"), ',')
+p = data[:, 1:1]'
+dx = data[:, 2:nstate+1]'
+x = data[:, nstate+2:2nstate+2]'
+
 # Plotting
-p1 = plot(; xlabel="Time [s]", ylabel="Pressure [mmHg]")
-plot!(p1, tv, pc.(tv), label="standard")
+p1 = plot(; xlabel="Time [s]", ylabel="Pressure [mmHg]", title="$(nstate) state model")
+
+scatter!(p1, tv, pc.(tv), label="data")
+
+
+A, B, C, D, u0 = get_standard_model(nstate)
+prob = ODEProblem(wk4p, u0, (0, tv[end]), (A, B))
+sol = solve(prob, saveat=h)
+x = Array(sol)
+p_wk = C * x + D * ϕc.(sol.t)'
+plot!(p1, tv, p_wk', label="windkessel")
+
 plot!(p1, tv, p', label="linear fit")
-savefig(p1, joinpath("fig", "linear_parameter_fit.png"))
+
+savefig(p1, joinpath("fig", "order_$(nstate)_linear_parameter_fit.png"))
