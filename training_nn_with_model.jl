@@ -45,13 +45,13 @@ optprob = OptimizationProblem(optf, optsol.u, p)
 optsol = solve(optprob, BFGS(), callback=callback)
 
 # Generate data
-psall = [vec(A); vec(B); optsol.u]
-prob = ODEProblem(wk4p_nn, u0, (0, tv[end]), psall)
+psall = [vec(p[1]); vec(p[2]); optsol.u]
+prob = ODEProblem(wk4p_nn, p[5], (0, tv[end]), psall)
 sol = solve(prob, saveat=h)
 x = [Array(sol); ϕc.(sol.t)']
 nnout = re(optsol.u)(x)
-dx = reduce(hcat, wk4p.(sol.u, ((A, B),), sol.t))
-pest = [C D] * x 
+dx = reduce(hcat, wk4p.(sol.u, ((p[1], p[2]),), sol.t))
+pest = [p[3] p[4]] * x 
 
 # Save data
 println("Saving data")
