@@ -130,6 +130,7 @@ p_ext = wkpar[3] * Array(sol) + wkpar[4] * ϕc.(sol.t)'
 mse_symb = sum(abs2, p_ext' - pc.(tv))
 plot!(p1, tv, p_ext', label="wk + symbolic regression")
 
+mkpath("fig")
 savefig(p1, joinpath("fig", "order_$(nstate)_nn_with_model.png"))
 
 writedlm(joinpath("data", "estimates", "order_$(nstate)_nn_with_model_mse.csv"), [mse_wk, mse_nn, mse_symb] ./ length(tv))

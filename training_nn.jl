@@ -140,6 +140,7 @@ plot!(p1, tv, pest', label="nn")
 mse_symb = sum(abs2, p_ext' - pc.(tv))
 plot!(p1, tv, p_ext', label="symbolic regression")
 
+mkpath("fig")
 savefig(p1, joinpath("fig", "order_$(nstate)_nn.png"))
 
 writedlm(joinpath("data", "estimates", "order_$(nstate)_nn_mse.csv"), [mse_wk, mse_nn, mse_symb] ./ length(tv))

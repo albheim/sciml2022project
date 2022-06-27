@@ -39,3 +39,22 @@ function wk4p(x, p, t)
     A, B = p
     A * x + B * [ϕc(t)]
 end
+
+function plot_standard()
+    A, B, C, D, u0 = get_standard_model(1)
+    prob = ODEProblem(wk4p, u0, (0, tv[end]), (A, B))
+    sol = solve(prob, saveat=h)
+    x = Array(sol)
+    p1 = C * x + D * ϕc.(sol.t)'
+
+    A, B, C, D, u0 = get_standard_model(2)
+    prob = ODEProblem(wk4p, u0, (0, tv[end]), (A, B))
+    sol = solve(prob, saveat=h)
+    x = Array(sol)
+    p2 = C * x + D * ϕc.(sol.t)'
+
+    pp = plot(tv, [pc.(tv) p1' p2'], right_margin=5Plots.mm,legend=:topleft,ylabel="Pressure [mmHg]",xlabel="Time [s]",labels=["p" "p̂₁" "p̂₂"],size=0.8.*(600,400),ylims=[60,120])
+    plot!(twinx(), tv, ϕc.(tv),ylims=[-5,70])
+    pϕ = plot(tv, ϕc.(tv))
+    display(pp,pϕ,layout=(2,1))
+end
