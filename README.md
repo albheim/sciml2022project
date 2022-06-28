@@ -10,10 +10,10 @@ The main scripts to run are the `training_*.jl` scripts, and they are for
 * `nn_with_model` - Use the parameters for the standard Windkessel model, but add a neural network in the dynamics equations to capture unmodeled dynamics. Only train the neural network and let the other parameters be the standard ones.
 * `nn` - Use neural network for the whole dynamics equation and the observation equation. Optimize the networks as well as the initial conditions for the internal states.
 
-At the start of each script a variable `nstate` is set to either 1 or 2 deciding on the order of the model generated.
+At the start of each script a variable `nstate` is set to either 1 or 2 deciding the order of the model generated.
 
-To run you first need julia, this was tested with julia 1.7.2 but will likely work on newer versions as well. 
-Start by cloning the repo and open a terminal in the repo. The environment is instantiated by 
+To run, you first need julia, this was tested with julia 1.7.2 but will likely work on newer versions as well. 
+Start by cloning the repo and open a terminal in the repo folder. The environment is instantiated by 
 ```julia
 julia --project -e "import Pkg; Pkg.instantiate()"
 ```
@@ -21,4 +21,4 @@ and then the scripts can be run as
 ```julia
 julia --project training_<experiment>.jl --order n --repeat k
 ```
-where `<experiment>` is replaced to denote one of the three scripts, `n` is set to the order of the approximation (default 1, can also be 2) and `repeat` is set to the number of times to repeat the data (default 1, higher integers will help enforce periodicity).
+where `<experiment>` is replaced to denote one of the three scripts, `n` is set to the order of the approximation (default 1, can also be 2) and `repeat` is set to the number of times to repeat the data (default 1, higher integers will help enforce periodicity). Alternatively, the scripts can be run manually in REPL, though then the setup should probably be run manually instead of included automatically to sort out setting up some initial parameters without parsing command line arguments.

@@ -45,13 +45,10 @@ x = [Array(sol); ϕc.(sol.t)']
 dx = [A B] * x
 p = [C D] * x
 
-
-
 # Save data
 println("Saving data")
 writedlm(joinpath("data", "estimates", "order_$(nstate)_param_fit.csv"), [p' dx' x'], ',')
 writedlm(joinpath("data", "estimates", "order_$(nstate)_params.csv"), optsol.u, ',')
-
 
 # Read data
 data = readdlm(joinpath("data", "estimates", "order_$(nstate)_param_fit.csv"), ',')
@@ -60,10 +57,9 @@ dx = data[:, 2:nstate+1]'
 x = data[:, nstate+2:2nstate+2]'
 
 # Plotting
-p1 = plot(; xlabel="Time [s]", ylabel="Pressure [mmHg]", title="$(nstate) state model")
+p1 = plot(; xlabel="Time [s]", ylabel="Pressure [mmHg]", title="$(nstate) state model");
 
 scatter!(p1, tv, pc.(tv), label="data")
-
 
 A, B, C, D, u0 = get_standard_model(nstate)
 prob = ODEProblem(wk4p, u0, (0, tv[end]), (A, B))
@@ -76,6 +72,7 @@ plot!(p1, tv, p_wk', label="windkessel")
 mse_lin = sum(abs2, pest' - pc.(tv)) / length(tv)
 plot!(p1, tv, pest', label="linear fit")
 
+mkpath("fig")
 savefig(p1, joinpath("fig", "order_$(nstate)_linear_parameter_fit.png"))
 
 writedlm(joinpath("data", "estimates", "order_$(nstate)_linear_mse.csv"), [mse_wk, mse_lin])
