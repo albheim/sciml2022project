@@ -1,7 +1,5 @@
-function first_order_standard_model()
-    Rp = 13.6
-    Cc = 0.0996
-
+function first_order_standard_model(params=[13.6, 0.0996])
+    Rp, Cc = params
     A = [-1/(Cc*Rp);;]
     B = [1.0;;]
     C = [1/Cc;;]
@@ -11,12 +9,9 @@ function first_order_standard_model()
     A, B, C, D, u0
 end
 
-function second_order_standard_model()
-    Rp = 0.79 # Peripheral (systemic) resistance [mmHg*ml^-1*s]
-    Cc = 1.22 # Total arterial compliance [ml/mmHg]
-    Rc = 0.056 # characeristic aoritic resistance
-    L = 0.0051 # Total arterial impedance [mmHg*s^2*ml^-1]
-    Rp, Cc, Rc, L = [1000 / 60, 60 / 1000, 1000 / 60, 1000 / 60] .* [Rp, Cc, Rc, L] # convert impedance units to match L/min flows 
+
+function second_order_standard_model(params=[0.79, 1.22, 0.056, 0.0051])
+    Rp, Cc, Rc, L = [1000 / 60, 60 / 1000, 1000 / 60, 1000 / 60] .* params
 
     A = [-1/(Cc*Rp) 0; 0 -Rc/L]
     B = [1; Rc;;]
