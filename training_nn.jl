@@ -1,8 +1,5 @@
 include(joinpath(@__DIR__, "setup.jl"))
 
-# Parameters
-nstate = 2
-
 # Neural net 
 hidden = 16
 nnps1, re1 = Flux.destructure(
@@ -29,7 +26,7 @@ function simulate_nn(ps, p)
     nnps = ps[nnsize2+1:nnsize2+nnsize1]
     u0 = ps[end-nstate+1:end]
     prob = ODEProblem(wk4p_nn, u0, (0, tv[end]), nnps)
-    solve(prob, saveat=h)
+    solve(prob, saveat=tv)
 end
 
 function loss_nn(ps, p)
@@ -98,7 +95,7 @@ f_dyn, = build_function(expr_dyn, states(result(res)); expression=Val(false))
 
 wk4p_extended(x, p, t) = p([x; ϕc(t)])
 prob = ODEProblem(wk4p_extended, x[1:end-1, 1], (0, tv[end]), f_dyn)
-sol = solve(prob, saveat=h)
+sol = solve(prob, saveat=tv)
 x_ext = [Array(sol); ϕc.(sol.t)']
 
 # Then we find observation function, based on new dynamics function
@@ -129,17 +126,17 @@ scatter!(p1, tv, pc.(tv), label="data")
 
 wkpar = get_standard_model(nstate)
 prob = ODEProblem(wk4p, wkpar[5], (0, tv[end]), wkpar[1:2])
-sol = solve(prob, saveat=h)
+sol = solve(prob, saveat=tv)
 p_wk = wkpar[3] * Array(sol) + wkpar[4] * ϕc.(sol.t)'
-mse_wk = sum(abs2, p_wk' - pc.(tv))
+mse_wk = sum(abs2, p_wk' - pc.(tv)) / length(tv)
 plot!(p1, tv, p_wk', label="wk")
 
-mse_nn = sum(abs2, pest' - pc.(tv))
+mse_nn = sum(abs2, pest' - pc.(tv)) / length(tv)
 plot!(p1, tv, pest', label="nn")
 
-mse_symb = sum(abs2, p_ext' - pc.(tv))
+mse_symb = sum(abs2, p_ext' - pc.(tv)) / length(tv)
 plot!(p1, tv, p_ext', label="symbolic regression")
 
 savefig(p1, joinpath("fig", "order_$(nstate)_nn.png"))
 
-writedlm(joinpath("data", "estimates", "order_$(nstate)_nn_mse.csv"), [mse_wk, mse_nn, mse_symb] ./ length(tv))
+writedlm(joinpath("data", "estimates", "order_$(nstate)_nn_mse.csv"), [mse_wk, mse_nn, mse_symb])

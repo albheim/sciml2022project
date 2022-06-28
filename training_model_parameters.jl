@@ -1,8 +1,5 @@
 include(joinpath(@__DIR__, "setup.jl"))
 
-# Parameters
-nstate = 1
-
 # Second  order model
 function wk4p(x, p, t)
     A, B = p
@@ -17,7 +14,7 @@ function loss(ps, p)
     D = ps[(ns+1)^2]
     u0 = reshape(ps[((ns+1)^2+1):((ns+1)^2+ns)], ns)
     prob = ODEProblem(wk4p, u0, (0, tv[end]), (A, B))
-    sol = solve(prob, saveat=h)
+    sol = solve(prob, saveat=tv)
     pest = vec(C * Array(sol) + D * ϕc.(sol.t)')
     mean(abs2, pest - pc.(sol.t)), pest
 end
@@ -27,12 +24,11 @@ ps = rand(nstate^2+3nstate+1)
 
 optf = OptimizationFunction(loss, Optimization.AutoForwardDiff())
 
+println("Running ADAM opt")
 optprob = OptimizationProblem(optf, ps, nstate)
 optsol = solve(optprob, ADAM(0.05), maxiters=1000, callback=callback)
 
-optprob = OptimizationProblem(optf, optsol.u, nstate)
-optsol = solve(optprob, ADAM(0.01), maxiters=200, callback=callback)
-
+println("Running BFGS opt")
 optprob = OptimizationProblem(optf, optsol.u, nstate)
 optsol = solve(optprob, BFGS(), callback=callback)
 
@@ -44,7 +40,7 @@ D = optsol.u[(nstate+1)^2]
 u0 = reshape(optsol.u[((nstate+1)^2+1):((nstate+1)^2+nstate)], nstate)
 
 prob = ODEProblem(wk4p, u0, (0, tv[end]), (A, B))
-sol = solve(prob, saveat=h)
+sol = solve(prob, saveat=tv)
 x = [Array(sol); ϕc.(sol.t)']
 dx = [A B] * x
 p = [C D] * x
@@ -71,15 +67,15 @@ scatter!(p1, tv, pc.(tv), label="data")
 
 A, B, C, D, u0 = get_standard_model(nstate)
 prob = ODEProblem(wk4p, u0, (0, tv[end]), (A, B))
-sol = solve(prob, saveat=h)
+sol = solve(prob, saveat=tv)
 x = Array(sol)
 p_wk = C * x + D * ϕc.(sol.t)'
-mse_wk = sum(abs2, p_wk' - pc.(tv))
+mse_wk = sum(abs2, p_wk' - pc.(tv)) / length(tv)
 plot!(p1, tv, p_wk', label="windkessel")
 
-mse_lin = sum(abs2, pest' - pc.(tv))
+mse_lin = sum(abs2, pest' - pc.(tv)) / length(tv)
 plot!(p1, tv, pest', label="linear fit")
 
 savefig(p1, joinpath("fig", "order_$(nstate)_linear_parameter_fit.png"))
 
-writedlm(joinpath("data", "estimates", "order_$(nstate)_linear_mse.csv"), [mse_wk, mse_lin] ./ length(tv))
+writedlm(joinpath("data", "estimates", "order_$(nstate)_linear_mse.csv"), [mse_wk, mse_lin])

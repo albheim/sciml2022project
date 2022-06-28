@@ -13,12 +13,12 @@ The main scripts to run are the `training_*.jl` scripts, and they are for
 At the start of each script a variable `nstate` is set to either 1 or 2 deciding on the order of the model generated.
 
 To run you first need julia, this was tested with julia 1.7.2 but will likely work on newer versions as well. 
-The environment is instantiated by 
+Start by cloning the repo and open a terminal in the repo. The environment is instantiated by 
 ```julia
-julia --project /path/to/this/repo -e "import Pkg; Pkg.instantiate()"
+julia --project -e "import Pkg; Pkg.instantiate()"
 ```
 and then the scripts can be run as
 ```julia
-julia --project /path/to/this/repo /path/to/this/repo/training_*.jl
+julia --project training_<experiment>.jl --order n --repeat k
 ```
-where `*` is replaced with one of the three scripts.
+where `<experiment>` is replaced to denote one of the three scripts, `n` is set to the order of the approximation (default 1, can also be 2) and `repeat` is set to the number of times to repeat the data (default 1, higher integers will help enforce periodicity).

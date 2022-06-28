@@ -1,8 +1,5 @@
 include(joinpath(@__DIR__, "setup.jl"))
 
-# Parameters
-nstate = 2
-
 # Neural net fit
 hidden = 16
 nnps, re= Flux.destructure(
@@ -25,7 +22,7 @@ function loss_nn(ps, p)
     A, B, C, D, u0 = p
     psall = [vec(A); vec(B); ps]
     prob = ODEProblem(wk4p_nn, u0, (0, tv[end]), psall)
-    sol = solve(prob, saveat=h)
+    sol = solve(prob, saveat=tv)
     pest = vec(C * Array(sol) + D * ϕc.(sol.t)')
     mean(abs2, pest .- pc.(sol.t)), pest
 end
@@ -38,7 +35,7 @@ optf = OptimizationFunction(loss_nn, Optimization.AutoForwardDiff())
 
 println("Running ADAM opt")
 optprob = OptimizationProblem(optf, ps, p)
-optsol = solve(optprob, ADAM(0.001), maxiters=500, callback=callback)
+optsol = solve(optprob, ADAM(0.001), maxiters=200, callback=callback)
 
 println("Running BFGS opt")
 optprob = OptimizationProblem(optf, optsol.u, p)
@@ -47,7 +44,7 @@ optsol = solve(optprob, BFGS(), callback=callback)
 # Generate data
 psall = [vec(p[1]); vec(p[2]); optsol.u]
 prob = ODEProblem(wk4p_nn, p[5], (0, tv[end]), psall)
-sol = solve(prob, saveat=h)
+sol = solve(prob, saveat=tv)
 x = [Array(sol); ϕc.(sol.t)']
 nnout = re(optsol.u)(x)
 dx = reduce(hcat, wk4p.(sol.u, ((p[1], p[2]),), sol.t))
@@ -116,20 +113,20 @@ scatter!(p1, tv, pc.(tv), label="data")
 
 wkpar = get_standard_model(nstate)
 prob = ODEProblem(wk4p, wkpar[5], (0, tv[end]), wkpar[1:2])
-sol = solve(prob, saveat=h)
+sol = solve(prob, saveat=tv)
 p_wk = wkpar[3] * Array(sol) + wkpar[4] * ϕc.(sol.t)'
-mse_wk = sum(abs2, p_wk' - pc.(tv))
+mse_wk = sum(abs2, p_wk' - pc.(tv)) / length(tv)
 plot!(p1, tv, p_wk', label="wk")
 
-mse_nn = sum(abs2, pest' - pc.(tv))
+mse_nn = sum(abs2, pest' - pc.(tv)) / length(tv)
 plot!(p1, tv, pest', label="wk + nn")
 
 prob = ODEProblem(wk4p_extended, x[1:nstate, 1], (0, tv[end]), (wkpar[1], wkpar[2], f))
-sol = solve(prob, saveat=h)
+sol = solve(prob, saveat=tv)
 p_ext = wkpar[3] * Array(sol) + wkpar[4] * ϕc.(sol.t)'
-mse_symb = sum(abs2, p_ext' - pc.(tv))
+mse_symb = sum(abs2, p_ext' - pc.(tv)) / length(tv)
 plot!(p1, tv, p_ext', label="wk + symbolic regression")
 
 savefig(p1, joinpath("fig", "order_$(nstate)_nn_with_model.png"))
 
-writedlm(joinpath("data", "estimates", "order_$(nstate)_nn_with_model_mse.csv"), [mse_wk, mse_nn, mse_symb] ./ length(tv))
+writedlm(joinpath("data", "estimates", "order_$(nstate)_nn_with_model_mse.csv"), [mse_wk, mse_nn, mse_symb])
